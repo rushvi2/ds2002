@@ -1,0 +1,75 @@
+# The script should prompt the user to input a country name.
+#
+# Make an API call to retrieve information about the entered country. You can use the examples from the site documentation IE https://restcountries.com/v3.1/name/{name}
+#
+# Extract and display the country's capital and population.
+#
+# Handle errors gracefully, such as invalid input or API call failures or non-existent countries.
+#
+# Display the results to the user AND store it in a dataframe and write that out to a JSON file. If you ask for more countries, append it to the same JSON file.
+
+import json
+import requests
+import requests.exceptions
+import pandas as pd
+
+country = input("Enter country name: ")
+print(country)
+
+
+def get_api_response(url, response_type):
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+
+    except requests.exceptions.HTTPError as errh:
+        return "An Http Error occurred: " + repr(errh)
+    except requests.exceptions.ConnectionError as errc:
+        return "An Error Connecting to the API occurred: " + repr(errc)
+    except requests.exceptions.Timeout as errt:
+        return "A Timeout Error occurred: " + repr(errt)
+    except requests.exceptions.RequestException as err:
+        return "An Unknown Error occurred: " + repr(err)
+
+    if response_type == 'json':
+        result = json.dumps(response.json(), sort_keys=True, indent=4)
+    elif response_type == 'dataframe':
+        result = pd.json_normalize(response.json())
+    else:
+        result = "An unhandled error has occurred!"
+
+    return result
+
+url = "https://restcountries.com/v3.1/name/" + country
+
+response_type = ['json', 'dataframe']
+
+country_info = get_api_response(url, response_type[1])
+
+if type(country_info) != str:
+    capital = country_info.get('capital')[0]
+    population = country_info.get('population', 'Unknown')[0]
+    print(capital)
+    print(population)
+
+    df_data = {
+        'Country': [country],
+        'Capital': [capital],
+        'Population': [population]
+    }
+
+    df = pd.DataFrame(df_data)
+    json_file_path = 'country_data.json'
+
+    try:
+        df_existing = pd.read_json(json_file_path)
+        df = pd.concat([df_existing, df], ignore_index=True)
+    except ValueError:
+        print("create new file")
+    except FileNotFoundError:
+        print("file not found")
+
+    df.to_json(json_file_path, orient='records', indent=4)
+    print("saved to JSON file.")
+else:
+    print("No such country")
